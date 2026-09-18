@@ -1,0 +1,15 @@
+{
+  "name": "ship-label-parser",
+  "version": "0.1.0",
+  "description": "Parser for a plain-text shipping label format with precise line-and-column error messages",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
