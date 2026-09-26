@@ -20,7 +20,7 @@ export interface PackageInfo {
 export interface ShippingLabel {
   from: Address
   to: Address
-  package: PackageInfo
+  packages: PackageInfo[]
 }
 
 const BLOCK_NAMES = ['from', 'to', 'package'] as const
@@ -232,11 +232,15 @@ function parsePackage(fieldLines: RawLine[], sourceName: string): PackageInfo {
 /**
  * Parses a shipping label document. `sourceName` is only used to label
  * the file/document in error output (e.g. "orders/1042.slbl").
+ *
+ * `from` and `to` may each appear once; `package` may repeat, one block
+ * per parcel on the shipment, and at least one is required.
  */
 export function parseLabel(source: string, sourceName = 'label'): ShippingLabel {
   const lines = splitLines(source)
-  const blocks = new Map<string, RawLine[]>()
-  let currentBlockName: string | null = null
+  const addressBlocks = new Map<string, RawLine[]>()
+  const packageBlocks: RawLine[][] = []
+  let currentFieldLines: RawLine[] | null = null
 
   for (const line of lines) {
     if (line.indent === 0) {
@@ -261,20 +265,25 @@ export function parseLabel(source: string, sourceName = 'label'): ShippingLabel 
           sourceName,
         })
       }
-      if (blocks.has(name)) {
-        throw new LabelSyntaxError({
-          message: `duplicate block "${name}"`,
-          line: line.lineNumber,
-          column: 1,
-          lineText: line.text,
-          length: name.length,
-          sourceName,
-        })
+      const fieldLines: RawLine[] = []
+      if (name === 'package') {
+        packageBlocks.push(fieldLines)
+      } else {
+        if (addressBlocks.has(name)) {
+          throw new LabelSyntaxError({
+            message: `duplicate block "${name}"`,
+            line: line.lineNumber,
+            column: 1,
+            lineText: line.text,
+            length: name.length,
+            sourceName,
+          })
+        }
+        addressBlocks.set(name, fieldLines)
       }
-      blocks.set(name, [])
-      currentBlockName = name
+      currentFieldLines = fieldLines
     } else {
-      if (currentBlockName === null) {
+      if (currentFieldLines === null) {
         throw new LabelSyntaxError({
           message: `indented line has no block header above it`,
           line: line.lineNumber,
@@ -284,12 +293,12 @@ export function parseLabel(source: string, sourceName = 'label'): ShippingLabel 
           sourceName,
         })
       }
-      blocks.get(currentBlockName)!.push(line)
+      currentFieldLines.push(line)
     }
   }
 
-  for (const required of BLOCK_NAMES) {
-    if (blocks.has(required)) continue
+  for (const required of ['from', 'to'] as const) {
+    if (addressBlocks.has(required)) continue
     const anchor = lines[lines.length - 1]
     throw new LabelSyntaxError({
       message: `missing required block "${required}"`,
@@ -300,10 +309,21 @@ export function parseLabel(source: string, sourceName = 'label'): ShippingLabel 
       sourceName,
     })
   }
+  if (packageBlocks.length === 0) {
+    const anchor = lines[lines.length - 1]
+    throw new LabelSyntaxError({
+      message: `missing required block "package"`,
+      line: anchor ? anchor.lineNumber : 1,
+      column: 1,
+      lineText: anchor ? anchor.text : '',
+      length: 1,
+      sourceName,
+    })
+  }
 
   return {
-    from: parseAddress(blocks.get('from')!, 'the "from" address', sourceName),
-    to: parseAddress(blocks.get('to')!, 'the "to" address', sourceName),
-    package: parsePackage(blocks.get('package')!, sourceName),
+    from: parseAddress(addressBlocks.get('from')!, 'the "from" address', sourceName),
+    to: parseAddress(addressBlocks.get('to')!, 'the "to" address', sourceName),
+    packages: packageBlocks.map((fieldLines) => parsePackage(fieldLines, sourceName)),
   }
 }

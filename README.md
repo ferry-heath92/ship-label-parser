@@ -42,8 +42,10 @@ package:
   service: priority
 ```
 
-Three blocks (`from`, `to`, `package`), each with indented `key: value`
-fields. Lines starting with `#` and blank lines are ignored anywhere.
+Three block types (`from`, `to`, `package`), each with indented
+`key: value` fields. `from` and `to` may each appear once; `package` may
+repeat — one block per parcel — and at least one is required. Lines
+starting with `#` and blank lines are ignored anywhere.
 
 ## Usage
 
@@ -77,7 +79,7 @@ package:
 
 try {
   const label = parseLabel(source, 'orders/1042.slbl')
-  console.log(label.to.city, label.package.weight)
+  console.log(label.to.city, label.packages[0].weight)
 } catch (err) {
   if (err instanceof LabelSyntaxError) {
     console.error(err.toString())
@@ -108,5 +110,6 @@ error: unknown unit "lbs", expected one of "lb", "kg"
 
 ## Status
 
-Early skeleton. The parser handles a single label per document; see the
-roadmap for what's planned next.
+Early skeleton. A document holds one `from`/`to` pair but can carry
+multiple `package` blocks (`label.packages` is always an array, even for
+a single parcel); see the roadmap for what's planned next.
